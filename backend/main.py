@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +12,16 @@ from seed import seed
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    seed()
+    for attempt in range(5):
+        try:
+            Base.metadata.create_all(bind=engine)
+            seed()
+            break
+        except Exception as e:
+            if attempt == 4:
+                raise
+            print(f"DB startup attempt {attempt+1} failed: {e}. Retrying in 5s...")
+            time.sleep(5)
     yield
 
 
