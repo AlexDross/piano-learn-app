@@ -1,7 +1,5 @@
-from database import engine, SessionLocal
-from models import Base, Song
-
-Base.metadata.create_all(bind=engine)
+from database import SessionLocal
+from models import Song
 
 
 def seed():

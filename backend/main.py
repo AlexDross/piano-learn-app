@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,10 +8,15 @@ from models import Base
 from routes.songs import router as songs_router
 from seed import seed
 
-Base.metadata.create_all(bind=engine)
-seed()
 
-app = FastAPI(title="Piano Learn API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    seed()
+    yield
+
+
+app = FastAPI(title="Piano Learn API", lifespan=lifespan)
 
 _default_origins = [
     "http://localhost:5173",
