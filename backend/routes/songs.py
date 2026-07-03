@@ -1,4 +1,10 @@
-import subprocess
+import os
+import re
+import ssl
+import json as _json
+import logging
+import urllib.parse
+import urllib.request
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
@@ -6,19 +12,58 @@ from typing import Optional
 from models import Song, Difficulty, SourceType, HandMode
 from database import get_db
 
+logger = logging.getLogger("uvicorn.error")
+
+# YouTube's own site blocks datacenter IPs (yt-dlp gets "confirm you're not a
+# bot"), so we use the official Data API v3, which is built for server-to-server
+# access and is not IP-blocked. Requires a free API key set via env var.
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
+
+# certifi gives a CA bundle that works on both macOS (whose framework Python
+# ships no certs) and Linux, so the HTTPS call succeeds in every environment.
+try:
+    import certifi
+    _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except Exception:  # pragma: no cover - certifi should be installed
+    _SSL_CONTEXT = ssl.create_default_context()
+
+_ISO8601_DURATION = re.compile(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$")
+
+
+def _iso8601_to_seconds(iso: str) -> int:
+    """Convert an ISO-8601 duration like 'PT6M16S' to total seconds."""
+    m = _ISO8601_DURATION.fullmatch(iso or "")
+    if not m:
+        return 0
+    hours, minutes, seconds = (int(g) if g else 0 for g in m.groups())
+    return hours * 3600 + minutes * 60 + seconds
+
 
 def fetch_yt_duration(video_id: str) -> int:
-    """Return video duration in seconds via yt-dlp, or 0 on failure."""
-    try:
-        result = subprocess.run(
-            ['yt-dlp', '--no-warnings', '--print', '%(duration)s',
-             f'https://www.youtube.com/watch?v={video_id}'],
-            capture_output=True, text=True, timeout=30,
-        )
-        val = result.stdout.strip()
-        return int(val) if val.isdigit() else 0
-    except Exception:
+    """Return video duration in seconds via the YouTube Data API v3, or 0."""
+    if not YOUTUBE_API_KEY:
+        logger.warning("YOUTUBE_API_KEY not set; cannot fetch duration for %s", video_id)
         return 0
+    params = urllib.parse.urlencode(
+        {"part": "contentDetails", "id": video_id, "key": YOUTUBE_API_KEY}
+    )
+    url = f"https://www.googleapis.com/youtube/v3/videos?{params}"
+    try:
+        with urllib.request.urlopen(url, timeout=15, context=_SSL_CONTEXT) as resp:
+            data = _json.loads(resp.read().decode())
+        items = data.get("items", [])
+        if not items:
+            logger.warning("YouTube Data API returned no items for %s", video_id)
+            return 0
+        iso = items[0].get("contentDetails", {}).get("duration", "")
+        seconds = _iso8601_to_seconds(iso)
+        if seconds == 0:
+            logger.warning("Could not parse duration %r for %s", iso, video_id)
+        return seconds
+    except Exception as e:
+        logger.warning("YouTube Data API duration fetch failed for %s: %s", video_id, e)
+        return 0
+
 
 router = APIRouter(prefix="/songs", tags=["songs"])
 
