@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Piano Learn API", lifespan=lifespan)
+app = FastAPI(title="Synthesia API", lifespan=lifespan)
 
 _default_origins = [
     "http://localhost:5173",

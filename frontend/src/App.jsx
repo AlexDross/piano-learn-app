@@ -9,7 +9,7 @@ function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🎹 Piano Learn</h1>
+        <h1>🎹 Synthesia</h1>
         <nav className="app-nav">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link nav-link-active' : 'nav-link'}>
             Library

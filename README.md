@@ -1,6 +1,6 @@
-# Piano Learn App
+# Synthesia
 
-Synthesia-style piano tutorial app for beginners. Browse a song library and learn by watching falling-notes visualizations synced with audio.
+A piano tutorial app for beginners. Browse a song library and learn by watching falling-notes visualizations synced with audio.
 
 ## Tech Stack
 
